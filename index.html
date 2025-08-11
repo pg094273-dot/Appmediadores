@@ -1,180 +1,250 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <link rel="manifest" href="manifest.json">
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mediadores Toral Reyes</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <style>
-        body {
-            font-family: 'Arial', sans-serif;
-            margin: 0;
-            padding: 20px;
-            text-align: center;
-            background: #121212;
-            color: white;
-        }
-        
-        .container {
-            background: #1e1e1e;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.2);
-            max-width: 90%;
-            margin: auto;
-            overflow: hidden;
-        }
-        
-        input, button {
-            padding: 10px;
-            font-size: 16px;
-            margin: 10px;
-            border-radius: 5px;
-            border: 1px solid #ccc;
-            width: 90%;
-        }
-        
-        button {
-            background: #007bff;
-            color: white;
-            border: none;
-            cursor: pointer;
-        }
-        
-        button:hover {
-            background: #0056b3;
-        }
-        
-        .table-container {
-            max-height: 500px;
-            overflow-y: auto;
-            border-radius: 10px;
-            box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
-            margin-top: 10px;
-        }
-        
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            background: white;
-            color: black;
-            table-layout: auto;
-        }
-        
-        th, td {
-            padding: 10px;
-            border: 1px solid #ddd;
-            text-align: left;
-        }
-        
-        th {
-            background: #007bff;
-            color: white;
-            position: sticky;
-            top: 0;
-            z-index: 2;
-        }
-        
-        tr:nth-child(even) {
-            background: #f9f9f9;
-        }
-        
-        .highlight {
-            background-color: #ffeb3b !important;
-            font-weight: bold;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>Gestor de Datos - Excel a PDF</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f9fafb;
+    }
+    input[type="file"], input[type="text"] {
+      font-size: 14px;
+      margin-bottom: 15px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      width: 100%;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 5px 5px 15px 0;
+      background-color: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #1d4ed8;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      padding: 8px;
+      border: 1px solid #ddd;
+      font-size: 12px;
+      text-align: left;
+    }
+    th {
+      background-color: #f1f5f9;
+    }
+    tr.selected {
+      background-color: #dbeafe;
+    }
+  </style>
 </head>
 <body>
 
-    <h1>MEDIADORES TORAL REYES</h1>
-    <div class="container">
-        <input type="file" id="fileInput" accept=".xls,.xlsx">
-        <input type="text" id="search" placeholder="🔍 Escribe para buscar..." onkeyup="buscar()">
-        <button id="exportBtn" onclick="exportarFiltrados()">📥 Exportar Resultados</button>
-        <button id="resetBtn" onclick="resetearTabla()">🔄 Restablecer</button>
+  <h2>📁 Subir archivo Excel (.xlsx)</h2>
+  <input type="file" id="excelFile" accept=".xlsx">
+  
+  <div id="acciones" style="display:none;">
+    <input type="text" id="filtro" onkeyup="filtrarTabla()" placeholder="🔍 Buscar en la tabla...">
+    <button onclick="exportarPDF()">📄 Exportar PDF seleccionado</button>
+    <button onclick="exportarHTML()">💾 Descargar HTML</button>
+    <button onclick="restablecer()">🔄 Restablecer búsqueda</button>
+  </div>
 
-        <div class="table-container">
-            <table id="dataTable">
-                <thead>
-                    <tr id="tableHeader"></tr>
-                </thead>
-                <tbody id="tableBody"></tbody>
-            </table>
-        </div>
-    </div>
+  <div id="contenedorTabla"></div>
 
-    <script>
-        let jsonData = [];
+  <script>
+    let headers = [];
 
-        document.getElementById('fileInput').addEventListener('change', function(event) {
-            let file = event.target.files[0];
-            let reader = new FileReader();
+    document.getElementById('excelFile').addEventListener('change', leerExcel);
 
-            reader.onload = function(e) {
-                let data = new Uint8Array(e.target.result);
-                let workbook = XLSX.read(data, { type: 'array' });
-                let sheetName = workbook.SheetNames[0];
-                let sheet = workbook.Sheets[sheetName];
-                jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+    function leerExcel(event) {
+      const file = event.target.files[0];
+      if (!file) return;
 
-                mostrarDatos(jsonData);
-            };
-            
-            reader.readAsArrayBuffer(file);
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const hoja = workbook.Sheets[workbook.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(hoja, { header: 1 });
+
+        mostrarTabla(json);
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function mostrarTabla(data) {
+      if (data.length < 2) return alert("El archivo debe tener encabezados y al menos una fila de datos.");
+      
+      headers = data[0];
+      const body = data.slice(1);
+      let html = '<table><thead><tr>';
+      headers.forEach(h => html += `<th>${h}</th>`);
+      html += '</tr></thead><tbody>';
+
+      body.forEach(fila => {
+        html += '<tr>';
+        headers.forEach((_, i) => {
+          let valor = (fila[i] || '').toString();
+          valor = valor.replace(/â‚¬/g, '€');  // limpiar caracteres mal codificados
+          html += `<td>${valor}</td>`;
         });
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
 
-        function mostrarDatos(data) {
-            let tableHeader = document.getElementById('tableHeader');
-            let tableBody = document.getElementById('tableBody');
+      document.getElementById('contenedorTabla').innerHTML = html;
+      document.getElementById('acciones').style.display = 'block';
 
-            tableHeader.innerHTML = "";
-            tableBody.innerHTML = "";
+      // Agrega selección por clic
+      document.querySelectorAll('tbody tr').forEach(tr => {
+        tr.addEventListener('click', () => tr.classList.toggle('selected'));
+      });
+    }
 
-            if (data.length > 0) {
-                let headerRow = document.createElement("tr");
-                data[0].forEach(header => {
-                    let th = document.createElement("th");
-                    th.textContent = header;
-                    headerRow.appendChild(th);
-                });
-                tableHeader.appendChild(headerRow);
-            }
+    function filtrarTabla() {
+      const texto = document.getElementById('filtro').value.toLowerCase();
+      document.querySelectorAll('tbody tr').forEach(fila => {
+        fila.style.display = fila.textContent.toLowerCase().includes(texto) ? '' : 'none';
+      });
+    }
 
-            for (let i = 1; i < data.length; i++) {
-                let row = document.createElement("tr");
-                data[i].forEach(cell => {
-                    let td = document.createElement("td");
-                    td.textContent = cell;
-                    row.appendChild(td);
-                });
-                tableBody.appendChild(row);
-            }
-        }
+    function restablecer() {
+      document.getElementById('filtro').value = '';
+      filtrarTabla();
+      document.querySelectorAll('tbody tr').forEach(tr => tr.classList.remove('selected'));
+    }
 
-        function buscar() {
-            let input = document.getElementById("search").value.toLowerCase();
-            let rows = document.querySelectorAll("#dataTable tbody tr");
+    function exportarPDF() {
+      const seleccionadas = document.querySelectorAll('tbody tr.selected');
+      if (seleccionadas.length === 0) return alert("Selecciona al menos una fila.");
 
-            rows.forEach(row => {
-                let text = row.textContent.toLowerCase();
-                row.style.display = text.includes(input) ? "" : "none";
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+      const fecha = new Date().toLocaleDateString();
+
+      seleccionadas.forEach((fila, index) => {
+        if (index > 0) doc.addPage();
+
+        doc.setFont("Helvetica", "bold");
+        doc.setFontSize(16);
+        doc.setTextColor(10, 40, 120); // azul oscuro
+        doc.text("MEDIADORES TORAL REYES", 40, 40);
+
+        doc.setFont("Helvetica", "normal");
+        doc.setFontSize(10);
+        doc.setTextColor(0, 0, 0);
+
+        const pageWidth = doc.internal.pageSize.getWidth() - 80;
+        let y = 70;
+
+        const celdas = fila.querySelectorAll('td');
+        headers.forEach((header, i) => {
+          doc.setFont("Helvetica", "bold");
+          const headerText = doc.splitTextToSize(header + ":", 120);
+          doc.text(headerText, 40, y);
+
+          doc.setFont("Helvetica", "normal");
+          const valor = celdas[i]?.innerText || '';
+          const valorText = doc.splitTextToSize(valor, pageWidth - 150);
+          doc.text(valorText, 160, y);
+          y += valorText.length * 14 + 10;
+        });
+      });
+
+      doc.save("informe_datos_seleccionados.pdf");
+
+      // Deseleccionar filas después de exportar
+      document.querySelectorAll('tbody tr.selected').forEach(tr => tr.classList.remove('selected'));
+    }
+
+    function exportarHTML() {
+      const tabla = document.getElementById('contenedorTabla').innerHTML;
+      const estilo = document.querySelector('style').outerHTML;
+
+      const buscador = `
+        <div>
+          <input type="text" id="filtro" onkeyup="filtrarTabla()" placeholder="🔍 Buscar en la tabla...">
+          <button onclick="exportarPDF()">📄 Exportar PDF seleccionado</button>
+          <button onclick="restablecer()">🔄 Restablecer búsqueda</button>
+        </div>
+      `;
+
+      const script = `
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"><\/script>
+        <script>
+          const headers = ${JSON.stringify(headers)};
+          function filtrarTabla() {
+            const texto = document.getElementById('filtro').value.toLowerCase();
+            document.querySelectorAll('tbody tr').forEach(fila => {
+              fila.style.display = fila.textContent.toLowerCase().includes(texto) ? '' : 'none';
             });
-        }
-
-        function resetearTabla() {
-            document.getElementById("search").value = "";
-            document.querySelectorAll("#dataTable tbody tr").forEach(row => {
-                row.style.display = "";
+          }
+          function restablecer() {
+            document.getElementById('filtro').value = '';
+            filtrarTabla();
+            document.querySelectorAll('tbody tr').forEach(tr => tr.classList.remove('selected'));
+          }
+          function exportarPDF() {
+            const seleccionadas = document.querySelectorAll('tbody tr.selected');
+            if (seleccionadas.length === 0) return alert("Selecciona al menos una fila.");
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+            const fecha = new Date().toLocaleDateString();
+            seleccionadas.forEach((fila, index) => {
+              if (index > 0) doc.addPage();
+              doc.setFont("Helvetica", "bold");
+              doc.setFontSize(16);
+              doc.setTextColor(10, 40, 120);
+              doc.text("MEDIADORES TORAL REYES", 40, 40);
+              doc.setFont("Helvetica", "normal");
+              doc.setFontSize(10);
+              doc.setTextColor(0, 0, 0);
+              const pageWidth = doc.internal.pageSize.getWidth() - 80;
+              let y = 70;
+              const celdas = fila.querySelectorAll('td');
+              headers.forEach((header, i) => {
+                doc.setFont("Helvetica", "bold");
+                const headerText = doc.splitTextToSize(header + ":", 120);
+                doc.text(headerText, 40, y);
+                doc.setFont("Helvetica", "normal");
+                const valor = celdas[i]?.innerText || '';
+                const valorText = doc.splitTextToSize(valor, pageWidth - 150);
+                doc.text(valorText, 160, y);
+                y += valorText.length * 14 + 10;
+              });
             });
-        }
-    </script>
+            doc.save("informe_datos_seleccionados.pdf");
+            document.querySelectorAll('tbody tr.selected').forEach(tr => tr.classList.remove('selected'));
+          }
+        <\/script>
+      `;
+
+      const contenido = `
+        <html>
+          <head>${estilo}</head>
+          <body>${buscador}${tabla}${script}</body>
+        </html>
+      `;
+
+      const blob = new Blob([contenido], { type: 'text/html;charset=utf-8' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'tabla_con_buscador.html';
+      link.click();
+    }
+  </script>
 </body>
 </html>
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("sw.js")
-    .then(() => console.log("Service Worker registrado"))
-    .catch((error) => console.log("Error al registrar el Service Worker", error));
-}
-
